@@ -1,0 +1,133 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Master template for Aurora MySQL with ProxySQL'
+
+Parameters:
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: EC2 Key Pair name
+  
+  AllowedCidrIngress:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: CIDR block allowed to access ProxySQL
+  
+  DBName:
+    Type: String
+    Default: proxysqlexample
+    Description: Database name
+  
+  DBUsername:
+    Type: String
+    Default: proxysqluser
+    Description: Database username
+  
+  DBPassword:
+    Type: String
+    Default: pr0xySQL01Cred
+    NoEcho: true
+    Description: Database password
+  
+  DBInstanceClass:
+    Type: String
+    Default: db.r6g.large
+    AllowedValues:
+      - db.r6g.large
+      - db.r6g.xlarge
+      - db.r6g.2xlarge
+      - db.r7g.large
+      - db.r7g.xlarge
+      - db.r6i.large
+      - db.r6i.xlarge
+    Description: Database instance class
+  
+  ProxySQLInstanceType:
+    Type: String
+    Default: t3.large
+    AllowedValues:
+      - t3.medium
+      - t3.large
+      - t3.xlarge
+      - t3a.medium
+      - t3a.large
+      - t3a.xlarge
+    Description: EC2 instance type for ProxySQL
+
+Resources:
+  NetworkStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://s3.amazonaws.com/BUCKET_NAME/proxysql-deploy/network.yaml
+      TimeoutInMinutes: 30
+      Parameters: {}
+  
+  AuroraStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: NetworkStack
+    Properties:
+      TemplateURL: https://s3.amazonaws.com/BUCKET_NAME/proxysql-deploy/aurora-cluster.yaml
+      TimeoutInMinutes: 30
+      Parameters:
+        VpcId: !GetAtt NetworkStack.Outputs.VpcId
+        DBSubnetIds: !Join
+          - ','
+          - - !GetAtt NetworkStack.Outputs.PrivateSubnet1Id
+            - !GetAtt NetworkStack.Outputs.PrivateSubnet2Id
+        DBName: !Ref DBName
+        DBUsername: !Ref DBUsername
+        DBPassword: !Ref DBPassword
+        DBInstanceClass: !Ref DBInstanceClass
+  
+  ProxySQLStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: AuroraStack
+    Properties:
+      TemplateURL: https://s3.amazonaws.com/BUCKET_NAME/proxysql-deploy/proxysql-ec2.yaml
+      TimeoutInMinutes: 30
+      Parameters:
+        VpcId: !GetAtt NetworkStack.Outputs.VpcId
+        SubnetId: !GetAtt NetworkStack.Outputs.PublicSubnet1Id
+        KeyName: !Ref KeyName
+        InstanceType: !Ref ProxySQLInstanceType
+        AllowedCidrIngress: !Ref AllowedCidrIngress
+        AuroraClusterEndpoint: !GetAtt AuroraStack.Outputs.ClusterEndpoint
+        AuroraReaderEndpoint: !GetAtt AuroraStack.Outputs.ReaderEndpoint
+        DBName: !Ref DBName
+        DBUsername: !Ref DBUsername
+        DBPassword: !Ref DBPassword
+
+Outputs:
+  VpcId:
+    Description: VPC ID
+    Value: !GetAtt NetworkStack.Outputs.VpcId
+  
+  AuroraClusterEndpoint:
+    Description: Aurora Cluster Endpoint
+    Value: !GetAtt AuroraStack.Outputs.ClusterEndpoint
+  
+  AuroraReaderEndpoint:
+    Description: Aurora Reader Endpoint
+    Value: !GetAtt AuroraStack.Outputs.ReaderEndpoint
+  
+  ProxySQLPublicIP:
+    Description: ProxySQL Public IP
+    Value: !GetAtt ProxySQLStack.Outputs.ProxySQLPublicIP
+  
+  ProxySQLPublicDNS:
+    Description: ProxySQL Public DNS
+    Value: !GetAtt ProxySQLStack.Outputs.ProxySQLPublicDNS
+  
+  ProxySQLMySQLEndpoint:
+    Description: ProxySQL MySQL Endpoint
+    Value: !GetAtt ProxySQLStack.Outputs.ProxySQLMySQLEndpoint
+  
+  ProxySQLAdminEndpoint:
+    Description: ProxySQL Admin Endpoint
+    Value: !GetAtt ProxySQLStack.Outputs.ProxySQLAdminEndpoint
+  
+  DBName:
+    Description: Database Name
+    Value: !Ref DBName
+  
+  DBUsername:
+    Description: Database Username
+    Value: !Ref DBUsername

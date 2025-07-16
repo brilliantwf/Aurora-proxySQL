@@ -1,0 +1,209 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Aurora MySQL 8.0 Cluster with ProxySQL Example'
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID for the Aurora cluster
+  
+  DBSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: List of subnet IDs for the Aurora DB subnet group
+  
+  DBName:
+    Type: String
+    Default: proxysqlexample
+    Description: Database name
+  
+  DBUsername:
+    Type: String
+    Default: proxysqluser
+    Description: Database master username
+  
+  DBPassword:
+    Type: String
+    Default: pr0xySQL01Cred
+    NoEcho: true
+    Description: Database master password
+  
+  DBInstanceClass:
+    Type: String
+    Default: db.r6g.large
+    AllowedValues:
+      - db.r6g.large
+      - db.r6g.xlarge
+      - db.r6g.2xlarge
+      - db.r7g.large
+      - db.r7g.xlarge
+      - db.r6i.large
+      - db.r6i.xlarge
+    Description: Database instance class
+  
+  DBEngineVersion:
+    Type: String
+    Default: 8.0.mysql_aurora.3.09.0
+    Description: Aurora MySQL engine version
+
+Resources:
+  AuroraSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Aurora MySQL cluster
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: aurora-security-group
+  
+  AuroraDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for Aurora MySQL cluster
+      SubnetIds: !Ref DBSubnetIds
+      Tags:
+        - Key: Name
+          Value: aurora-db-subnet-group
+  
+  AuroraClusterParameterGroup:
+    Type: AWS::RDS::DBClusterParameterGroup
+    Properties:
+      Description: Parameter group for Aurora MySQL 8.0 cluster
+      Family: aurora-mysql8.0
+      Parameters:
+        binlog_format: ROW
+        innodb_flush_log_at_trx_commit: 1
+        sync_binlog: 1
+  
+  AuroraDBParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: Parameter group for Aurora MySQL 8.0 instances
+      Family: aurora-mysql8.0
+      Parameters:
+        max_connections: 2000
+        innodb_buffer_pool_size: '{DBInstanceClassMemory*3/4}'
+  
+  AuroraDBCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      Engine: aurora-mysql
+      EngineVersion: !Ref DBEngineVersion
+      DatabaseName: !Ref DBName
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBClusterParameterGroupName: !Ref AuroraClusterParameterGroup
+      DBSubnetGroupName: !Ref AuroraDBSubnetGroup
+      VpcSecurityGroupIds:
+        - !GetAtt AuroraSecurityGroup.GroupId
+      BackupRetentionPeriod: 7
+      StorageEncrypted: true
+      EnableIAMDatabaseAuthentication: true
+      Tags:
+        - Key: Name
+          Value: aurora-cluster
+  
+  AuroraPrimaryInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: aurora-mysql
+      DBClusterIdentifier: !Ref AuroraDBCluster
+      DBInstanceClass: !Ref DBInstanceClass
+      DBParameterGroupName: !Ref AuroraDBParameterGroup
+      PubliclyAccessible: false
+      AutoMinorVersionUpgrade: true
+      MonitoringInterval: 60
+      MonitoringRoleArn: !GetAtt MonitoringRole.Arn
+      EnablePerformanceInsights: true
+      PerformanceInsightsRetentionPeriod: 7
+      Tags:
+        - Key: Name
+          Value: aurora-primary
+  
+  AuroraReaderInstance1:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: aurora-mysql
+      DBClusterIdentifier: !Ref AuroraDBCluster
+      DBInstanceClass: !Ref DBInstanceClass
+      DBParameterGroupName: !Ref AuroraDBParameterGroup
+      PubliclyAccessible: false
+      AutoMinorVersionUpgrade: true
+      MonitoringInterval: 60
+      MonitoringRoleArn: !GetAtt MonitoringRole.Arn
+      EnablePerformanceInsights: true
+      PerformanceInsightsRetentionPeriod: 7
+      Tags:
+        - Key: Name
+          Value: aurora-reader-1
+  
+  AuroraReaderInstance2:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: aurora-mysql
+      DBClusterIdentifier: !Ref AuroraDBCluster
+      DBInstanceClass: !Ref DBInstanceClass
+      DBParameterGroupName: !Ref AuroraDBParameterGroup
+      PubliclyAccessible: false
+      AutoMinorVersionUpgrade: true
+      MonitoringInterval: 60
+      MonitoringRoleArn: !GetAtt MonitoringRole.Arn
+      EnablePerformanceInsights: true
+      PerformanceInsightsRetentionPeriod: 7
+      Tags:
+        - Key: Name
+          Value: aurora-reader-2
+  
+  MonitoringRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: monitoring.rds.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
+
+Outputs:
+  ClusterEndpoint:
+    Description: Aurora Cluster Endpoint
+    Value: !GetAtt AuroraDBCluster.Endpoint.Address
+  
+  ReaderEndpoint:
+    Description: Aurora Reader Endpoint
+    Value: !GetAtt AuroraDBCluster.ReadEndpoint.Address
+  
+  PrimaryInstanceEndpoint:
+    Description: Aurora Primary Instance Endpoint
+    Value: !GetAtt AuroraPrimaryInstance.Endpoint.Address
+  
+  ReaderInstance1Endpoint:
+    Description: Aurora Reader Instance 1 Endpoint
+    Value: !GetAtt AuroraReaderInstance1.Endpoint.Address
+  
+  ReaderInstance2Endpoint:
+    Description: Aurora Reader Instance 2 Endpoint
+    Value: !GetAtt AuroraReaderInstance2.Endpoint.Address
+  
+  DBName:
+    Description: Database Name
+    Value: !Ref DBName
+  
+  DBUsername:
+    Description: Database Username
+    Value: !Ref DBUsername
+  
+  DBPassword:
+    Description: Database Password
+    Value: !Ref DBPassword
+    NoEcho: true
+  
+  SecurityGroupId:
+    Description: Security Group ID for Aurora Cluster
+    Value: !GetAtt AuroraSecurityGroup.GroupId
