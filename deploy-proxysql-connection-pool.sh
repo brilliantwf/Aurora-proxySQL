@@ -15,7 +15,7 @@ ALLOWED_CIDR="0.0.0.0/0"
 DB_NAME="proxysqlexample"
 DB_USERNAME="proxysqluser"
 DB_PASSWORD="{{YOUR_DB_PASSWORD}}"
-INSTANCE_TYPE="t3.large"
+INSTANCE_TYPE="m6in.xlarge"
 
 # 连接池参数
 MAX_CONNECTIONS=2000

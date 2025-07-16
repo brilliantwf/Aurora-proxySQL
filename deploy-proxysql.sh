@@ -13,7 +13,7 @@ AURORA_READER_ENDPOINT=""
 DB_NAME="proxysqlexample"
 DB_USERNAME="proxysqluser"
 DB_PASSWORD="{{YOUR_DB_PASSWORD}}"
-INSTANCE_TYPE="t3.large"
+INSTANCE_TYPE="m6in.xlarge"
 
 # 检查参数
 if [ $# -lt 7 ]; then

@@ -43,11 +43,20 @@ Parameters:
   
   ProxySQLInstanceType:
     Type: String
-    Default: t3.large
+    Default: m6in.xlarge
     AllowedValues:
       - t3.medium
       - t3.large
       - t3.xlarge
+      - t3a.medium
+      - t3a.large
+      - t3a.xlarge
+      - m6i.large
+      - m6i.xlarge
+      - m6i.2xlarge
+      - m6in.large
+      - m6in.xlarge
+      - m6in.2xlarge
       - t3a.medium
       - t3a.large
       - t3a.xlarge
