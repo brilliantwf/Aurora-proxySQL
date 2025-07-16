@@ -90,6 +90,24 @@
 - 一个 S3 存储桶用于存储 CloudFormation 模板
 - 一个 EC2 密钥对用于 SSH 连接
 
+## 安全注意事项
+
+1. **避免使用硬编码密码**：
+   - 部署前请修改所有脚本和模板中的 `{{YOUR_DB_PASSWORD}}` 占位符
+   - 生产环境中建议使用 AWS Secrets Manager 或参数存储管理敏感凭据
+
+2. **限制访问范围**：
+   - 确保 `AllowedCidrIngress` 参数设置为最小必要的 IP 范围
+   - 考虑使用 VPN 或 AWS Direct Connect 进行私有访问
+
+3. **定期轮换凭据**：
+   - 实施定期密码轮换策略
+   - 使用 AWS Secrets Manager 自动轮换功能
+
+4. **监控和审计**：
+   - 启用 CloudTrail 和 RDS 审计日志
+   - 设置 CloudWatch 警报监控异常访问模式
+
 ## 注意事项
 
 1. 在生产环境中，建议限制允许访问 ProxySQL 的 IP 地址范围

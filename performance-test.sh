@@ -21,7 +21,7 @@ echo "===== ProxySQL 读写分离性能测试 ====="
 
 # 设置变量
 DB_USER="proxysqluser"
-DB_PASSWORD="pr0xySQL01Cred"
+DB_PASSWORD="{{YOUR_DB_PASSWORD}}"
 DB_NAME="proxysqlexample"
 TEST_TABLE="load_test"
 NUM_WRITERS=5                  # 写入进程数

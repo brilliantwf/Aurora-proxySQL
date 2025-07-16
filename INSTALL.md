@@ -80,19 +80,19 @@ cd amazon-aurora-proxysql-example/proxysql-deploy
 ### 通过 ProxySQL 连接（推荐）
 
 ```bash
-mysql -u proxysqluser -ppr0xySQL01Cred -h <ProxySQL公网DNS> -P 6033
+mysql -u proxysqluser -p{{YOUR_DB_PASSWORD}} -h <ProxySQL公网DNS> -P 6033
 ```
 
 ### 直接连接到 Aurora 主实例
 
 ```bash
-mysql -u proxysqluser -ppr0xySQL01Cred -h <Aurora集群端点>
+mysql -u proxysqluser -p{{YOUR_DB_PASSWORD}} -h <Aurora集群端点>
 ```
 
 ### 直接连接到 Aurora 读取副本
 
 ```bash
-mysql -u proxysqluser -ppr0xySQL01Cred -h <Aurora读取端点>
+mysql -u proxysqluser -p{{YOUR_DB_PASSWORD}} -h <Aurora读取端点>
 ```
 
 ### 连接到 ProxySQL 管理界面

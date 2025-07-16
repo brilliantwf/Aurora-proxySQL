@@ -21,13 +21,13 @@ echo "===== ProxySQL 读写分离功能测试 ====="
 
 # 1. 清理测试环境
 echo -e "\n1. 清理测试环境"
-mysql -u proxysqluser -ppr0xySQL01Cred -h 127.0.0.1 -P 6033 -e "DROP DATABASE IF EXISTS rwtest;"
+mysql -u proxysqluser -p{{YOUR_DB_PASSWORD}} -h 127.0.0.1 -P 6033 -e "DROP DATABASE IF EXISTS rwtest;"
 echo "✓ 测试环境清理完成"
 
 # 2. 创建测试数据库和表
 echo -e "\n2. 创建测试数据库和表"
-mysql -u proxysqluser -ppr0xySQL01Cred -h 127.0.0.1 -P 6033 -e "CREATE DATABASE rwtest;"
-mysql -u proxysqluser -ppr0xySQL01Cred -h 127.0.0.1 -P 6033 -e "CREATE TABLE rwtest.test_table (
+mysql -u proxysqluser -p{{YOUR_DB_PASSWORD}} -h 127.0.0.1 -P 6033 -e "CREATE DATABASE rwtest;"
+mysql -u proxysqluser -p{{YOUR_DB_PASSWORD}} -h 127.0.0.1 -P 6033 -e "CREATE TABLE rwtest.test_table (
   id INT AUTO_INCREMENT PRIMARY KEY, 
   data VARCHAR(100), 
   server_info VARCHAR(100),
@@ -43,7 +43,7 @@ echo "✓ 统计数据已清除"
 # 4. 执行写入操作
 echo -e "\n4. 执行写入操作"
 for i in {1..5}; do
-  result=$(mysql -u proxysqluser -ppr0xySQL01Cred -h 127.0.0.1 -P 6033 -e "
+  result=$(mysql -u proxysqluser -p{{YOUR_DB_PASSWORD}} -h 127.0.0.1 -P 6033 -e "
     INSERT INTO rwtest.test_table (data, server_info) 
     VALUES ('test data $i', CONCAT(@@hostname, ':', @@port, ', read_only=', @@innodb_read_only));
     SELECT CONCAT(@@hostname, ':', @@port, ', read_only=', @@innodb_read_only) AS write_server;
@@ -56,7 +56,7 @@ done
 # 5. 执行读取操作
 echo -e "\n5. 执行读取操作"
 for i in {1..5}; do
-  result=$(mysql -u proxysqluser -ppr0xySQL01Cred -h 127.0.0.1 -P 6033 -e "
+  result=$(mysql -u proxysqluser -p{{YOUR_DB_PASSWORD}} -h 127.0.0.1 -P 6033 -e "
     SELECT CONCAT(@@hostname, ':', @@port, ', read_only=', @@innodb_read_only) AS read_server;
   ")
   
@@ -67,7 +67,7 @@ done
 # 6. 执行SELECT查询
 echo -e "\n6. 执行SELECT查询"
 echo "普通SELECT查询结果:"
-mysql -u proxysqluser -ppr0xySQL01Cred -h 127.0.0.1 -P 6033 -e "
+mysql -u proxysqluser -p{{YOUR_DB_PASSWORD}} -h 127.0.0.1 -P 6033 -e "
   SELECT *, CONCAT(@@hostname, ':', @@port, ', read_only=', @@innodb_read_only) AS current_server 
   FROM rwtest.test_table;
 "
@@ -75,7 +75,7 @@ mysql -u proxysqluser -ppr0xySQL01Cred -h 127.0.0.1 -P 6033 -e "
 # 7. 执行FOR UPDATE查询
 echo -e "\n7. 执行FOR UPDATE查询"
 echo "SELECT FOR UPDATE查询结果:"
-mysql -u proxysqluser -ppr0xySQL01Cred -h 127.0.0.1 -P 6033 -e "
+mysql -u proxysqluser -p{{YOUR_DB_PASSWORD}} -h 127.0.0.1 -P 6033 -e "
   SELECT *, CONCAT(@@hostname, ':', @@port, ', read_only=', @@innodb_read_only) AS current_server 
   FROM rwtest.test_table 
   WHERE id = 1 
@@ -93,12 +93,12 @@ mysql -u admin -padmin -h 127.0.0.1 -P 6032 -e "
 # 9. 验证直接连接到不同端点的结果
 echo -e "\n9. 验证直接连接到不同端点的结果"
 echo "写入端点:"
-mysql -u proxysqluser -ppr0xySQL01Cred -h aurora-cluster-auroracluster-icvnrrb4xtkh.cluster-cwkdiy6uthcp.us-east-1.rds.amazonaws.com -e "
+mysql -u proxysqluser -p{{YOUR_DB_PASSWORD}} -h {{YOUR_AURORA_CLUSTER_ENDPOINT}} -e "
   SELECT @@hostname, @@port, @@innodb_read_only;
 "
 
 echo "读取端点:"
-mysql -u proxysqluser -ppr0xySQL01Cred -h aurora-cluster-auroracluster-icvnrrb4xtkh.cluster-ro-cwkdiy6uthcp.us-east-1.rds.amazonaws.com -e "
+mysql -u proxysqluser -p{{YOUR_DB_PASSWORD}} -h {{YOUR_AURORA_READER_ENDPOINT}} -e "
   SELECT @@hostname, @@port, @@innodb_read_only;
 "
 
@@ -149,5 +149,5 @@ fi
 
 # 12. 显示测试数据
 echo -e "\n12. 测试数据"
-mysql -u proxysqluser -ppr0xySQL01Cred -h 127.0.0.1 -P 6033 -e "SELECT * FROM rwtest.test_table;"
+mysql -u proxysqluser -p{{YOUR_DB_PASSWORD}} -h 127.0.0.1 -P 6033 -e "SELECT * FROM rwtest.test_table;"
 EOF

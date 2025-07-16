@@ -8,7 +8,7 @@ VPC_ID=""
 SUBNET_IDS=""
 DB_NAME="proxysqlexample"
 DB_USERNAME="proxysqluser"
-DB_PASSWORD="pr0xySQL01Cred"
+DB_PASSWORD="{{YOUR_DB_PASSWORD}}"
 DB_INSTANCE_CLASS="db.r6g.large"
 
 # 检查参数

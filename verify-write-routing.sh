@@ -21,13 +21,13 @@ echo "===== 验证ProxySQL写入操作路由 ====="
 
 # 1. 清理测试环境
 echo -e "\n1. 清理测试环境"
-mysql -u proxysqluser -ppr0xySQL01Cred -h 127.0.0.1 -P 6033 -e "DROP DATABASE IF EXISTS writetest;"
+mysql -u proxysqluser -p{{YOUR_DB_PASSWORD}} -h 127.0.0.1 -P 6033 -e "DROP DATABASE IF EXISTS writetest;"
 echo "✓ 测试环境清理完成"
 
 # 2. 创建测试数据库和表
 echo -e "\n2. 创建测试数据库和表"
-mysql -u proxysqluser -ppr0xySQL01Cred -h 127.0.0.1 -P 6033 -e "CREATE DATABASE writetest;"
-mysql -u proxysqluser -ppr0xySQL01Cred -h 127.0.0.1 -P 6033 -e "CREATE TABLE writetest.server_info (
+mysql -u proxysqluser -p{{YOUR_DB_PASSWORD}} -h 127.0.0.1 -P 6033 -e "CREATE DATABASE writetest;"
+mysql -u proxysqluser -p{{YOUR_DB_PASSWORD}} -h 127.0.0.1 -P 6033 -e "CREATE TABLE writetest.server_info (
   id INT AUTO_INCREMENT PRIMARY KEY, 
   operation VARCHAR(100),
   hostname VARCHAR(100),
@@ -44,7 +44,7 @@ echo "✓ 统计数据已清除"
 
 # 4. 执行写入操作，直接在INSERT语句中获取服务器信息
 echo -e "\n4. 执行写入操作，直接在INSERT语句中获取服务器信息"
-mysql -u proxysqluser -ppr0xySQL01Cred -h 127.0.0.1 -P 6033 -e "
+mysql -u proxysqluser -p{{YOUR_DB_PASSWORD}} -h 127.0.0.1 -P 6033 -e "
   INSERT INTO writetest.server_info (operation, hostname, port, read_only) 
   VALUES ('INSERT', @@hostname, @@port, @@innodb_read_only);
 "
@@ -52,19 +52,19 @@ echo "✓ 写入操作完成"
 
 # 5. 查看写入的数据
 echo -e "\n5. 查看写入的数据"
-mysql -u proxysqluser -ppr0xySQL01Cred -h 127.0.0.1 -P 6033 -e "
+mysql -u proxysqluser -p{{YOUR_DB_PASSWORD}} -h 127.0.0.1 -P 6033 -e "
   SELECT * FROM writetest.server_info;
 "
 
 # 6. 直接连接到写入端点和读取端点进行验证
 echo -e "\n6. 直接连接到写入端点和读取端点进行验证"
 echo "写入端点:"
-mysql -u proxysqluser -ppr0xySQL01Cred -h aurora-cluster-auroracluster-icvnrrb4xtkh.cluster-cwkdiy6uthcp.us-east-1.rds.amazonaws.com -e "
+mysql -u proxysqluser -p{{YOUR_DB_PASSWORD}} -h {{YOUR_AURORA_CLUSTER_ENDPOINT}} -e "
   SELECT @@hostname, @@port, @@innodb_read_only;
 "
 
 echo "读取端点:"
-mysql -u proxysqluser -ppr0xySQL01Cred -h aurora-cluster-auroracluster-icvnrrb4xtkh.cluster-ro-cwkdiy6uthcp.us-east-1.rds.amazonaws.com -e "
+mysql -u proxysqluser -p{{YOUR_DB_PASSWORD}} -h {{YOUR_AURORA_READER_ENDPOINT}} -e "
   SELECT @@hostname, @@port, @@innodb_read_only;
 "
 
@@ -78,11 +78,11 @@ mysql -u admin -padmin -h 127.0.0.1 -P 6032 -e "
 
 # 8. 结论
 echo -e "\n8. 结论"
-write_server=$(mysql -u proxysqluser -ppr0xySQL01Cred -h 127.0.0.1 -P 6033 -e "
+write_server=$(mysql -u proxysqluser -p{{YOUR_DB_PASSWORD}} -h 127.0.0.1 -P 6033 -e "
   SELECT hostname, port, read_only FROM writetest.server_info WHERE operation='INSERT';
 " | grep -v "hostname" | head -1)
 
-primary_server=$(mysql -u proxysqluser -ppr0xySQL01Cred -h aurora-cluster-auroracluster-icvnrrb4xtkh.cluster-cwkdiy6uthcp.us-east-1.rds.amazonaws.com -e "
+primary_server=$(mysql -u proxysqluser -p{{YOUR_DB_PASSWORD}} -h {{YOUR_AURORA_CLUSTER_ENDPOINT}} -e "
   SELECT @@hostname, @@port, @@innodb_read_only;
 " | grep -v "@@hostname" | head -1)
 

@@ -22,7 +22,8 @@ Parameters:
   
   DBPassword:
     Type: String
-    Default: pr0xySQL01Cred
+    NoEcho: true
+    Default: {{YOUR_DB_PASSWORD}}
     NoEcho: true
     Description: Database master password
   
