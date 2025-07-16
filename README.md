@@ -133,6 +133,8 @@ sed -i 's/{{YOUR_DB_PASSWORD}}/您的实际密码/g' deploy-aurora.sh deploy-pro
 
 - [安装指南](INSTALL.md) - 详细的安装步骤和说明
 - [目录结构](STRUCTURE.md) - 项目文件和目录结构说明
+- [ProxySQL架构](PROXYSQL_ARCHITECTURE.md) - ProxySQL工作原理与架构详解
+- [连接池配置](CONNECTION_POOL.md) - ProxySQL连接池增强版说明
 
 ## 前提条件
 
