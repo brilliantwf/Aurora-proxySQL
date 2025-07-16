@@ -19,6 +19,33 @@
 - **自动读写分离**：基于 SQL 查询类型自动路由请求
 - **详细的测试脚本**：提供多种测试脚本验证读写分离功能和性能
 
+## 部署准备
+
+在开始部署之前，请确保完成以下准备工作，以避免部署过程中出现异常：
+
+1. **替换占位符**：
+   - 在所有脚本和模板中，将 `{{YOUR_DB_PASSWORD}}` 替换为您的实际数据库密码
+   - 密码应符合 Aurora 要求：至少8个字符，包含大小写字母、数字和特殊字符
+
+2. **检查脚本权限**：
+   - 确保所有 `.sh` 脚本具有执行权限：`chmod +x *.sh`
+
+3. **S3 存储桶准备**：
+   - 确保您指定的 S3 存储桶已存在且您有权限访问
+   - 存储桶应与您部署的区域在同一区域，或启用跨区域访问
+
+4. **EC2 密钥对**：
+   - 确保您指定的 EC2 密钥对在目标区域中存在
+   - 保存好密钥对的私钥文件（.pem），后续连接 ProxySQL 实例时需要使用
+
+5. **网络配置**：
+   - 如果使用现有 VPC，确保它至少有两个不同可用区的子网
+   - 确保 CIDR 范围不与现有网络冲突
+
+6. **IAM 权限**：
+   - 确保您的 AWS 账户有足够权限创建所需资源（VPC、EC2、RDS 等）
+   - 如果使用 IAM 角色，确保角色有 CloudFormation、S3、EC2、RDS 等服务的权限
+
 ## 部署方式
 
 本项目提供两种部署方式：
@@ -28,6 +55,10 @@
 使用主 CloudFormation 模板一次性部署整个架构，包括网络、Aurora 集群和 ProxySQL。
 
 ```bash
+# 首先替换脚本中的占位符
+sed -i 's/{{YOUR_DB_PASSWORD}}/您的实际密码/g' deploy.sh master.yaml aurora-cluster.yaml proxysql-ec2.yaml
+
+# 然后执行部署
 ./deploy.sh <S3存储桶名称> <堆栈名称> <AWS区域> [密钥对名称] [允许的CIDR]
 ```
 
@@ -36,6 +67,9 @@
 分别部署网络、Aurora 集群和 ProxySQL，适合需要更精细控制的场景。
 
 ```bash
+# 首先替换脚本中的占位符
+sed -i 's/{{YOUR_DB_PASSWORD}}/您的实际密码/g' deploy-aurora.sh deploy-proxysql.sh aurora-cluster.yaml proxysql-ec2.yaml
+
 # 部署 Aurora 集群
 ./deploy-aurora.sh <S3存储桶名称> <堆栈名称> <AWS区域> <VPC ID> <子网ID列表>
 
@@ -57,6 +91,23 @@
 # 执行性能测试
 ./performance-test.sh <ProxySQL公网IP> <SSH密钥路径>
 ```
+
+### 测试注意事项
+
+1. **确保SSH密钥权限正确**：
+   - 密钥文件权限应设置为 `400` 或 `600`：`chmod 400 your-key.pem`
+   - 否则SSH连接可能会被拒绝
+
+2. **等待服务完全启动**：
+   - ProxySQL 和 Aurora 集群可能需要几分钟才能完全初始化
+   - 如果测试失败，请等待几分钟后重试
+
+3. **检查安全组设置**：
+   - 确保您的 IP 地址在允许访问 ProxySQL 的 CIDR 范围内
+   - 验证 ProxySQL 安全组允许从您的 IP 访问 22 端口(SSH)和 6033 端口(MySQL)
+
+4. **测试脚本中的端点**：
+   - 如果您修改了测试脚本中的 Aurora 端点占位符，请确保使用正确的实际端点替换
 
 ## 文件说明
 
