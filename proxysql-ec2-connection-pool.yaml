@@ -1,0 +1,345 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ProxySQL EC2 Instance for Aurora MySQL with Enhanced Connection Pool'
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID for the ProxySQL EC2 instance
+  
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet ID for the ProxySQL EC2 instance
+  
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: EC2 Key Pair name
+  
+  InstanceType:
+    Type: String
+    Default: t3.large
+    AllowedValues:
+      - t3.medium
+      - t3.large
+      - t3.xlarge
+      - t3a.medium
+      - t3a.large
+      - t3a.xlarge
+    Description: EC2 instance type
+  
+  AllowedCidrIngress:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: CIDR block allowed to access ProxySQL
+  
+  AuroraClusterEndpoint:
+    Type: String
+    Description: Aurora Cluster Endpoint for write operations
+  
+  AuroraReaderEndpoint:
+    Type: String
+    Description: Aurora Reader Endpoint for read operations
+  
+  DBName:
+    Type: String
+    Default: proxysqlexample
+    Description: Database name
+  
+  DBUsername:
+    Type: String
+    Default: proxysqluser
+    Description: Database username
+  
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Default: {{YOUR_DB_PASSWORD}}
+    Description: Database password
+  
+  # 连接池配置参数
+  MaxConnections:
+    Type: Number
+    Default: 2000
+    Description: Maximum number of client connections allowed by ProxySQL
+  
+  MaxConnectionsPerUser:
+    Type: Number
+    Default: 1000
+    Description: Maximum number of connections per user
+  
+  ConnectionMaxAgeMs:
+    Type: Number
+    Default: 3600000
+    Description: Maximum age of connections in milliseconds (1 hour)
+  
+  FreeConnectionsPct:
+    Type: Number
+    Default: 10
+    Description: Percentage of connections to keep free
+  
+  ConnectionDelayMultiplexMs:
+    Type: Number
+    Default: 60000
+    Description: Delay for multiplexing in milliseconds (1 minute)
+  
+  MaxTransactionTime:
+    Type: Number
+    Default: 1800000
+    Description: Maximum transaction time in milliseconds (30 minutes)
+  
+  MaxQueryTime:
+    Type: Number
+    Default: 300000
+    Description: Maximum query time in milliseconds (5 minutes)
+
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: ami-0a3c3a20c09d6f377
+    us-east-2:
+      AMI: ami-0629230f2b3ca3eed
+    us-west-1:
+      AMI: ami-0239cf1e4c359c4af
+    us-west-2:
+      AMI: ami-0dba2cb6798deb6d8
+    eu-west-1:
+      AMI: ami-0c1c30571d2dae5c9
+    eu-central-1:
+      AMI: ami-0f61af304b14f15e3
+    ap-northeast-1:
+      AMI: ami-0d52744d6551d851e
+    ap-southeast-1:
+      AMI: ami-0df7a207adb9748c7
+    ap-southeast-2:
+      AMI: ami-0310483fb2b488153
+
+Resources:
+  ProxySQLSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ProxySQL EC2 instance
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AllowedCidrIngress
+        - IpProtocol: tcp
+          FromPort: 6033
+          ToPort: 6033
+          CidrIp: !Ref AllowedCidrIngress
+        - IpProtocol: tcp
+          FromPort: 6032
+          ToPort: 6032
+          CidrIp: !Ref AllowedCidrIngress
+      Tags:
+        - Key: Name
+          Value: proxysql-connection-pool-sg
+  
+  ProxySQLRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: ProxySQLPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+  
+  ProxySQLInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref ProxySQLRole
+  
+  ProxySQLInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      KeyName: !Ref KeyName
+      SubnetId: !Ref SubnetId
+      SecurityGroupIds:
+        - !GetAtt ProxySQLSecurityGroup.GroupId
+      IamInstanceProfile: !Ref ProxySQLInstanceProfile
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 30
+            VolumeType: gp3
+            DeleteOnTermination: true
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          # Update system
+          dnf update -y
+          
+          # Install required packages
+          dnf install -y wget git jq mysql nc
+
+          # Install ProxySQL
+          wget -O /tmp/proxysql-2.5.5-1-centos8.x86_64.rpm https://github.com/sysown/proxysql/releases/download/v2.5.5/proxysql-2.5.5-1-centos8.x86_64.rpm
+          dnf install -y /tmp/proxysql-2.5.5-1-centos8.x86_64.rpm
+          
+          # Start ProxySQL service
+          systemctl enable proxysql
+          systemctl start proxysql
+          
+          # Configure ProxySQL
+          cat > /tmp/proxysql-config.sql << 'EOF'
+          -- MySQL Servers
+          DELETE FROM mysql_servers;
+          INSERT INTO mysql_servers(hostgroup_id, hostname, port, weight) VALUES (10, '${AuroraClusterEndpoint}', 3306, 1000);
+          INSERT INTO mysql_servers(hostgroup_id, hostname, port, weight) VALUES (20, '${AuroraReaderEndpoint}', 3306, 1000);
+          
+          -- MySQL Users
+          DELETE FROM mysql_users;
+          INSERT INTO mysql_users(username, password, active, default_hostgroup, transaction_persistent, max_connections) 
+          VALUES ('${DBUsername}', '${DBPassword}', 1, 10, 1, ${MaxConnectionsPerUser});
+          
+          -- MySQL Query Rules
+          DELETE FROM mysql_query_rules;
+          INSERT INTO mysql_query_rules(rule_id, active, match_digest, destination_hostgroup, apply) VALUES (50, 1, '^SELECT.*FOR UPDATE$', 10, 1);
+          INSERT INTO mysql_query_rules(rule_id, active, match_digest, destination_hostgroup, apply) VALUES (51, 1, '^SELECT', 20, 1);
+          
+          -- 连接池基本配置
+          UPDATE global_variables SET variable_value='${MaxConnections}' WHERE variable_name='mysql-max_connections';
+          UPDATE global_variables SET variable_value='${FreeConnectionsPct}' WHERE variable_name='mysql-free_connections_pct';
+          UPDATE global_variables SET variable_value='${ConnectionMaxAgeMs}' WHERE variable_name='mysql-connection_max_age_ms';
+          
+          -- 连接复用配置
+          UPDATE global_variables SET variable_value='true' WHERE variable_name='mysql-multiplexing';
+          UPDATE global_variables SET variable_value='${ConnectionDelayMultiplexMs}' WHERE variable_name='mysql-connection_delay_multiplex_ms';
+          
+          -- 连接超时和限制配置
+          UPDATE global_variables SET variable_value='${MaxTransactionTime}' WHERE variable_name='mysql-max_transaction_time';
+          UPDATE global_variables SET variable_value='${MaxQueryTime}' WHERE variable_name='mysql-max_query_time';
+          UPDATE global_variables SET variable_value='true' WHERE variable_name='mysql-enforce_autocommit_on_reads';
+          
+          -- 连接池监控配置
+          UPDATE global_variables SET variable_value='60' WHERE variable_name='mysql-monitor_connect_interval';
+          UPDATE global_variables SET variable_value='3000' WHERE variable_name='mysql-monitor_ping_interval';
+          UPDATE global_variables SET variable_value='1000' WHERE variable_name='mysql-monitor_read_only_interval';
+          
+          -- 连接池健康检查配置
+          UPDATE global_variables SET variable_value='200' WHERE variable_name='mysql-monitor_connect_timeout';
+          UPDATE global_variables SET variable_value='500' WHERE variable_name='mysql-monitor_ping_timeout';
+          UPDATE global_variables SET variable_value='500' WHERE variable_name='mysql-monitor_read_only_timeout';
+          
+          -- 保存配置
+          SAVE MYSQL SERVERS TO DISK;
+          SAVE MYSQL USERS TO DISK;
+          SAVE MYSQL QUERY RULES TO DISK;
+          SAVE MYSQL VARIABLES TO DISK;
+          
+          -- 加载配置
+          LOAD MYSQL SERVERS TO RUNTIME;
+          LOAD MYSQL USERS TO RUNTIME;
+          LOAD MYSQL QUERY RULES TO RUNTIME;
+          LOAD MYSQL VARIABLES TO RUNTIME;
+          EOF
+          
+          # Apply ProxySQL configuration
+          mysql -u admin -padmin -h 127.0.0.1 -P 6032 < /tmp/proxysql-config.sql
+          
+          # Create monitor user in Aurora
+          cat > /tmp/create-monitor-user.sql << 'EOF'
+          CREATE USER IF NOT EXISTS 'monitor'@'%' IDENTIFIED BY 'monitor';
+          GRANT SELECT ON *.* TO 'monitor'@'%';
+          EOF
+          
+          # Wait for Aurora to be available
+          echo "Waiting for Aurora to be available..."
+          until mysql -u ${DBUsername} -p${DBPassword} -h ${AuroraClusterEndpoint} -e "SELECT 1"; do
+            sleep 10
+          done
+          
+          # Create monitor user
+          mysql -u ${DBUsername} -p${DBPassword} -h ${AuroraClusterEndpoint} < /tmp/create-monitor-user.sql
+          
+          # Configure ProxySQL monitor user
+          cat > /tmp/monitor-config.sql << 'EOF'
+          UPDATE global_variables SET variable_value='${DBUsername}' WHERE variable_name='mysql-monitor_username';
+          UPDATE global_variables SET variable_value='monitor' WHERE variable_name='mysql-monitor_password';
+          LOAD MYSQL VARIABLES TO RUNTIME;
+          SAVE MYSQL VARIABLES TO DISK;
+          EOF
+          
+          mysql -u admin -padmin -h 127.0.0.1 -P 6032 < /tmp/monitor-config.sql
+          
+          # Create test database and table
+          cat > /tmp/create-test-db.sql << 'EOF'
+          CREATE DATABASE IF NOT EXISTS ${DBName};
+          USE ${DBName};
+          CREATE TABLE IF NOT EXISTS test_table (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            data VARCHAR(100),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+          EOF
+          
+          mysql -u ${DBUsername} -p${DBPassword} -h ${AuroraClusterEndpoint} < /tmp/create-test-db.sql
+          
+          # 创建连接池状态监控脚本
+          cat > /usr/local/bin/monitor-proxysql-pool.sh << 'EOF'
+          #!/bin/bash
+          
+          # 获取连接池状态
+          mysql -u admin -padmin -h 127.0.0.1 -P 6032 -e "SELECT * FROM stats.stats_mysql_connection_pool" > /var/log/proxysql-pool-stats.log
+          
+          # 获取全局状态
+          mysql -u admin -padmin -h 127.0.0.1 -P 6032 -e "SHOW MYSQL STATUS" >> /var/log/proxysql-pool-stats.log
+          EOF
+          
+          chmod +x /usr/local/bin/monitor-proxysql-pool.sh
+          
+          # 设置定时任务每5分钟监控一次连接池状态
+          echo "*/5 * * * * root /usr/local/bin/monitor-proxysql-pool.sh" > /etc/cron.d/proxysql-monitor
+          
+          # Clean up temporary files
+          rm -f /tmp/proxysql-config.sql /tmp/create-monitor-user.sql /tmp/monitor-config.sql /tmp/create-test-db.sql
+          
+          # Signal completion
+          echo "ProxySQL with enhanced connection pool setup completed" > /var/log/proxysql-setup-complete.log
+      Tags:
+        - Key: Name
+          Value: proxysql-connection-pool-instance
+
+Outputs:
+  ProxySQLInstanceId:
+    Description: ProxySQL EC2 Instance ID
+    Value: !Ref ProxySQLInstance
+  
+  ProxySQLPublicIP:
+    Description: ProxySQL Public IP
+    Value: !GetAtt ProxySQLInstance.PublicIp
+  
+  ProxySQLPublicDNS:
+    Description: ProxySQL Public DNS
+    Value: !GetAtt ProxySQLInstance.PublicDnsName
+  
+  ProxySQLMySQLEndpoint:
+    Description: ProxySQL MySQL Endpoint
+    Value: !Sub ${ProxySQLInstance.PublicDnsName}:6033
+  
+  ProxySQLAdminEndpoint:
+    Description: ProxySQL Admin Endpoint
+    Value: !Sub ${ProxySQLInstance.PublicDnsName}:6032
+  
+  SecurityGroupId:
+    Description: Security Group ID for ProxySQL Instance
+    Value: !GetAtt ProxySQLSecurityGroup.GroupId
